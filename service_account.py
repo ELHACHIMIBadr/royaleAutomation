@@ -1,30 +1,33 @@
+import os
+import json
 import gspread
 from datetime import datetime
+from google.oauth2.service_account import Credentials
 
-# Nom exact du fichier JSON (il doit être à la racine du projet)
-SERVICE_ACCOUNT_FILE = 'royaleheurebot-43c46ef6f78f.json'
-
-# Nom exact du Google Sheet
+# === Constantes ===
 SPREADSHEET_NAME = 'Commande Royale Heure'
-
-# Noms des onglets
 LEADS_SHEET_NAME = 'Leads'
 WATCH_DB_SHEET_NAME = 'Base de données montres RH'
 
-# Connexion à Google Sheets
-gc = gspread.service_account(filename=SERVICE_ACCOUNT_FILE)
+# === Lecture du JSON de credentials depuis la variable d’environnement
+creds_dict = json.loads(os.environ["GOOGLE_CREDS_JSON"])
+
+# === Création des credentials Google
+scopes = ['https://www.googleapis.com/auth/spreadsheets']
+credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+
+# === Connexion Sheets
+gc = gspread.authorize(credentials)
 sh = gc.open(SPREADSHEET_NAME)
 
-# Accès aux feuilles
 leads_sheet = sh.worksheet(LEADS_SHEET_NAME)
 watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 
-# Fonction utilitaire pour ajouter une ligne dans Leads
+# === Ajouter ligne dans Leads
 def append_to_leads(data: list):
     today = datetime.now().strftime('%d/%m/%Y')
     leads_sheet.append_row([today] + data)
 
-# Fonction utilitaire pour récupérer la base des montres (liste de dicts)
+# === Récupérer base montres
 def get_watch_database():
-    records = watch_db_sheet.get_all_records()
-    return records  # Liste de dictionnaires
+    return watch_db_sheet.get_all_records()
