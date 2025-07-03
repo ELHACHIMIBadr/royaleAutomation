@@ -1,4 +1,3 @@
-import os
 import json
 import gspread
 from datetime import datetime
@@ -9,8 +8,9 @@ SPREADSHEET_NAME = 'Commande Royale Heure'
 LEADS_SHEET_NAME = 'Leads'
 WATCH_DB_SHEET_NAME = 'Base de données montres RH'
 
-# === Lecture du JSON de credentials depuis la variable d’environnement
-creds_dict = json.loads(os.environ["GOOGLE_CREDS_JSON"])
+# === Lecture depuis le fichier secret Render
+with open("/etc/secrets/royaleheurebot-43c46ef6f78f.json", "r") as f:
+    creds_dict = json.load(f)
 
 # === Création des credentials Google
 scopes = ['https://www.googleapis.com/auth/spreadsheets']
