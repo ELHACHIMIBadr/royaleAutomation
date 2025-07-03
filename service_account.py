@@ -9,7 +9,7 @@ LEADS_SHEET_NAME = 'Leads'
 WATCH_DB_SHEET_NAME = 'Base de données montres RH'
 
 # === Lecture depuis le fichier secret Render
-with open("/etc/secrets/royaleheurebot-43c46ef6f78f.json", "r") as f:
+with open('/etc/secrets/royaleheurebot-6215c544a8d4.json', 'r') as f:
     creds_dict = json.load(f)
 
 # === Création des credentials Google
