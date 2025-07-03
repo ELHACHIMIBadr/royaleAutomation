@@ -1,3 +1,4 @@
+import os
 import json
 import gspread
 from datetime import datetime
@@ -8,15 +9,15 @@ SPREADSHEET_NAME = 'Commande Royale Heure'
 LEADS_SHEET_NAME = 'Leads'
 WATCH_DB_SHEET_NAME = 'Base de données montres RH'
 
-# === Lecture depuis le fichier secret Render
+# === Lecture depuis le fichier secret fourni par Render
 with open('/etc/secrets/royaleheurebot-6215c544a8d4.json', 'r') as f:
     creds_dict = json.load(f)
 
-# === Création des credentials Google
+# === Création des credentials
 scopes = ['https://www.googleapis.com/auth/spreadsheets']
 credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 
-# === Connexion Sheets
+# === Connexion à Google Sheets
 gc = gspread.authorize(credentials)
 sh = gc.open(SPREADSHEET_NAME)
 
