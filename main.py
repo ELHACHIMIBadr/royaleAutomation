@@ -5,8 +5,7 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
     ContextTypes, ConversationHandler
 )
-import gspread
-from google.oauth2.service_account import Credentials
+from service_account import append_to_leads, get_watch_database
 
 # === Logger ===
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -17,25 +16,22 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 PORT = int(os.environ.get("PORT", 8443))
 
-# === Google Sheets Auth ===
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
-creds = Credentials.from_service_account_file("royaleheurebot-43c46ef6f78f.json", scopes=SCOPES)
-client = gspread.authorize(creds)
-sheet = client.open("Commande Royale Heure")
-leads_ws = sheet.worksheet("Leads")
-db_ws = sheet.worksheet("Base de données montres RH")
-
 # === States ===
 (
     NOM, TEL, VILLE, ADRESSE, SEXE,
-    MARQUE, GAMME, FINITION, BOITE, PRIX_VENTE, RESUME
-) = range(11)
+    MARQUE, GAMME, FINITION, BOITE, PRIX_VENTE
+) = range(10)
 
-user_data_temp = {}
+# Charger la base montres
+watch_db = get_watch_database()
 
+# IDs autorisés à déclencher le bot
+AUTHORIZED_USERS = [5427202496, 1580306191]  # remplace-les par tes ID
+
+# === Démarrage de la conversation ===
 async def start_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    if user.id not in [5427202496, 1580306191, 1122334455]:
+    if user.id not in AUTHORIZED_USERS:
         return
     await update.message.reply_text("📋 Nom du client ?")
     return NOM
@@ -62,28 +58,31 @@ async def get_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_sexe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['sexe'] = update.message.text
-    marques = list(set([row[0] for row in db_ws.get_all_values()[1:] if row[0]]))
-    await update.message.reply_text("⌚ Marque ?", reply_markup=ReplyKeyboardMarkup([marques[i:i+2] for i in range(0, len(marques), 2)], one_time_keyboard=True))
+    marques = sorted(set(row['marque'] for row in watch_db))
+    keyboard = [marques[i:i+2] for i in range(0, len(marques), 2)]
+    await update.message.reply_text("⌚ Marque ?", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
     return MARQUE
 
 async def get_marque(update: Update, context: ContextTypes.DEFAULT_TYPE):
     marque = update.message.text
     context.user_data['marque'] = marque
-    gammes = list(set([row[1] for row in db_ws.get_all_values()[1:] if row[0] == marque]))
-    await update.message.reply_text("📎 Gamme ?", reply_markup=ReplyKeyboardMarkup([gammes[i:i+2] for i in range(0, len(gammes), 2)], one_time_keyboard=True))
+    gammes = sorted(set(row['gamme'] for row in watch_db if row['marque'] == marque))
+    keyboard = [gammes[i:i+2] for i in range(0, len(gammes), 2)]
+    await update.message.reply_text("📎 Gamme ?", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
     return GAMME
 
 async def get_gamme(update: Update, context: ContextTypes.DEFAULT_TYPE):
     gamme = update.message.text
     context.user_data['gamme'] = gamme
     marque = context.user_data['marque']
-    finitions = list(set([row[2] for row in db_ws.get_all_values()[1:] if row[0] == marque and row[1] == gamme]))
-    await update.message.reply_text("🎨 Finition ?", reply_markup=ReplyKeyboardMarkup([finitions[i:i+2] for i in range(0, len(finitions), 2)], one_time_keyboard=True))
+    finitions = sorted(set(row['finition'] for row in watch_db if row['marque'] == marque and row['gamme'] == gamme))
+    keyboard = [finitions[i:i+2] for i in range(0, len(finitions), 2)]
+    await update.message.reply_text("🎨 Finition ?", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
     return FINITION
 
 async def get_finition(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['finition'] = update.message.text
-    await update.message.reply_text("🎁 Boîte ?", reply_markup=ReplyKeyboardMarkup([["Simple", "Originale"]], one_time_keyboard=True))
+    await update.message.reply_text("🎁 Type de boîte ?", reply_markup=ReplyKeyboardMarkup([["Simple", "Originale"]], one_time_keyboard=True))
     return BOITE
 
 async def get_boite(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -93,44 +92,37 @@ async def get_boite(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['prix_vente'] = update.message.text
-    marque = context.user_data['marque']
-    gamme = context.user_data['gamme']
-    finition = context.user_data['finition']
 
-    db_rows = db_ws.get_all_values()[1:]
-    prix_achat = next((row[3] for row in db_rows if row[0] == marque and row[1] == gamme and row[2] == finition), "??")
+    # Recherche du prix d’achat
+    data = context.user_data
+    prix_achat = next(
+        (row['prix_achat'] for row in watch_db
+         if row['marque'] == data['marque']
+         and row['gamme'] == data['gamme']
+         and row['finition'] == data['finition']),
+        "??"
+    )
     context.user_data['prix_achat'] = prix_achat
 
+    # Résumé final
     resume = (
         f"✅ Résumé de la commande :\n"
-        f"👤 Nom : {context.user_data['nom']}\n"
-        f"📞 Téléphone : {context.user_data['tel']}\n"
-        f"🏙️ Ville : {context.user_data['ville']}\n"
-        f"📍 Adresse : {context.user_data['adresse']}\n"
-        f"👥 Sexe : {context.user_data['sexe']}\n"
-        f"⌚ Marque : {context.user_data['marque']}\n"
-        f"📎 Gamme : {context.user_data['gamme']}\n"
-        f"🎨 Finition : {context.user_data['finition']}\n"
-        f"🎁 Boîte : {context.user_data['boite']}\n"
-        f"💰 Vente : {context.user_data['prix_vente']} | Achat : {prix_achat}"
+        f"👤 Nom : {data['nom']}\n"
+        f"📞 Téléphone : {data['tel']}\n"
+        f"🏙️ Ville : {data['ville']}\n"
+        f"📍 Adresse : {data['adresse']}\n"
+        f"👥 Sexe : {data['sexe']}\n"
+        f"⌚ Marque : {data['marque']}\n"
+        f"📎 Gamme : {data['gamme']}\n"
+        f"🎨 Finition : {data['finition']}\n"
+        f"🎁 Boîte : {data['boite']}\n"
+        f"💰 Vente : {data['prix_vente']} | Achat : {prix_achat}"
     )
-    await update.message.reply_text(resume + "\n\nMerci, la commande est enregistrée.")
 
-    leads_ws.append_row([
-        "",  # Date auto dans Google Sheet
-        context.user_data['nom'],
-        context.user_data['tel'],
-        context.user_data['ville'],
-        "",  # coût de livraison à compléter
-        context.user_data['marque'],
-        context.user_data['gamme'],
-        context.user_data['finition'],
-        prix_achat,
-        context.user_data['prix_vente'],
-        "Confirmé",
-        context.user_data['adresse'],
-        ""  # commentaire
-    ])
+    await update.message.reply_text(resume + "\n\n✅ Merci, la commande est enregistrée.")
+
+    # Insertion dans la sheet
+    append_to_leads(context.user_data)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
