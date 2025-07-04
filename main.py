@@ -1,5 +1,7 @@
 import logging
 import os
+import threading
+import time
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -10,7 +12,7 @@ from service_account import (
     get_marques_by_sexe, get_modeles_by_sexe_marque,
     get_finitions, get_prix_achat
 )
-from woocommerce_orders import fetch_woocommerce_orders  # 🆕 Intégration WooCommerce
+from woocommerce_orders import fetch_woocommerce_orders
 
 # === Logger ===
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -144,6 +146,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Commande annulée.")
     return ConversationHandler.END
 
+# === Lancement du bot Telegram
 def launch_bot():
     app = Application.builder().token(BOT_TOKEN).build()
 
@@ -174,10 +177,21 @@ def launch_bot():
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
 
-# === Point d’entrée dynamique ===
+# === Lancement du worker WooCommerce en tâche de fond
+def start_woocommerce_worker():
+    def worker():
+        while True:
+            try:
+                fetch_woocommerce_orders()
+                logger.info("[WooCommerce Worker] ✅ Import terminé")
+            except Exception as e:
+                logger.error(f"[WooCommerce Worker] ❌ Erreur : {e}")
+            time.sleep(300)  # Attente 5 minutes
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+
+# === Point d’entrée principal
 if __name__ == "__main__":
-    # 🧠 Si variable TRIGGER_WOO définie → traitement WooCommerce uniquement
-    if os.environ.get("TRIGGER_WOO") == "1":
-        fetch_woocommerce_orders()
-    else:
-        launch_bot()
+    start_woocommerce_worker()  # 🔁 Lance le thread WooCommerce
+    launch_bot()                # 🤖 Lance le bot Telegram
