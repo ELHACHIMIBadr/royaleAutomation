@@ -101,18 +101,17 @@ async def get_boite(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['prix_vente'] = update.message.text
 
-    # Recherche du prix d’achat
     data = context.user_data
     prix_achat = get_prix_achat(
         watch_db,
         data['sexe'],
         data['marque'],
         data['modele'],
-        data['finition']
+        data['finition'],
+        data['boite']  # ajout du prix boîte dans le calcul
     )
     context.user_data['prix_achat'] = prix_achat
 
-    # Demander un commentaire
     await update.message.reply_text("📝 Un commentaire (facultatif) ? (ex: livraison le vendredi 05/07)")
     return COMMENTAIRE
 
