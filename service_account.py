@@ -28,8 +28,8 @@ sh = gc.open(SPREADSHEET_NAME)
 leads_sheet = sh.worksheet(LEADS_SHEET_NAME)
 watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 
-# === Ajouter une ligne dans Leads avec incrémentation automatique
-def append_to_leads(data: dict):
+# === BOT TELEGRAM : Ajouter une ligne dans Leads avec incrémentation automatique
+def append_bot_lead(data: dict):
     today = datetime.now().strftime('%d/%m/%Y')
 
     # Incrémentation automatique du n° client
@@ -55,7 +55,7 @@ def append_to_leads(data: dict):
 
     leads_sheet.append_row(ligne)
 
-# === Récupérer la base montres (normalisée)
+# === WATCH RH : Récupérer la base montres (normalisée)
 def get_watch_database():
     records = watch_db_sheet.get_all_records()
     normalized_records = []
@@ -67,7 +67,7 @@ def get_watch_database():
         normalized_records.append(normalized_row)
     return normalized_records
 
-# === Funnel dynamique ===
+# === FUNNEL DYNAMIQUE ===
 
 def get_marques_by_sexe(watch_db, sexe):
     return sorted(set(
@@ -113,3 +113,31 @@ def get_prix_achat(watch_db, sexe, marque, modele, finition, boite):
                 return base  # fallback en cas d'erreur
 
     return ''
+
+# === LEADS SHEET - Lecture pour vérification WooCommerce
+def get_leads_data():
+    """Récupère toutes les lignes existantes du Google Sheet 'Leads' sous forme de dictionnaires"""
+    records = leads_sheet.get_all_records()
+    return records
+
+# === LEADS SHEET - Insertion WooCommerce (sans numéro client)
+def append_woocommerce_lead(row_data: dict):
+    """Ajoute une ligne dans le Google Sheet 'Leads' sans numéro client (WooCommerce uniquement)"""
+    ligne = [
+        row_data.get("Date", ""),            # ✅ Date
+        "",                                  # 🚫 n° client vide
+        row_data.get("Nom", ""),             # Nom
+        row_data.get("Numéro", ""),          # Numéro
+        row_data.get("Ville", ""),           # Ville
+        row_data.get("Adresse", ""),         # Adresse
+        0,                                   # Coût de livraison
+        row_data.get("Marque", ""),          # Marque
+        row_data.get("Gamme", ""),           # Gamme / Modèle
+        row_data.get("Finition", ""),        # Finition
+        row_data.get("Prix achat", ""),      # Prix d'achat
+        row_data.get("Prix vente", ""),      # Prix de vente
+        row_data.get("Statut", ""),          # Statut (ex: À confirmer)
+        row_data.get("Commentaire", "")      # Commentaire
+    ]
+
+    leads_sheet.append_row(ligne)
