@@ -31,31 +31,29 @@ watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 # === Ajouter une ligne dans Leads avec incrémentation automatique
 def append_to_leads(data: dict):
     today = datetime.now().strftime('%d/%m/%Y')
-
-    # Récupération du dernier numéro client (colonne A)
-    all_rows = leads_sheet.get_all_values()
-    last_client_number = 0
-    if len(all_rows) > 1 and all_rows[-1][0].isdigit():
-        last_client_number = int(all_rows[-1][0])
-    new_client_number = last_client_number + 1
-
+    
+    # Incrémentation automatique du n° client
+    existing_rows = leads_sheet.get_all_values()
+    next_id = len(existing_rows)  # en comptant l'en-tête
+    
     ligne = [
-        new_client_number,                      # N° client (auto-incrémenté)
-        today,                                  # Date
-        data.get("nom", ""),                    # Nom
-        data.get("tel", ""),                    # Téléphone
-        data.get("ville", ""),                  # Ville
-        data.get("adresse", ""),                # Adresse
-        0,                                      # Coût livraison
-        data.get("marque", ""),                 # Marque
-        data.get("modele", ""),                 # Modèle
-        data.get("finition", ""),               # Finition
-        data.get("prix_achat", ""),             # Prix d'achat
-        data.get("prix_vente", ""),             # Prix de vente
-        "Confirmé",                             # Statut
-        "",                                     # Adresse complète
-        data.get("commentaire", "")             # Commentaire
+        next_id,                        # n client
+        today,                          # Date
+        data.get("nom", ""),            # Nom
+        data.get("tel", ""),            # Numéro
+        data.get("ville", ""),          # Ville
+        data.get("adresse", ""),        # Adresse
+        0,                              # Coût de livraison
+        data.get("marque", ""),         # Montre
+        data.get("modele", ""),         # Modèle
+        data.get("finition", ""),       # Finition
+        data.get("prix_achat", ""),     # Prix d'achat
+        data.get("prix_vente", ""),     # Prix de vente
+        "Confirmé",                     # Statut
+        "",                             # Adresse complète
+        data.get("commentaire", "")     # Commentaire
     ]
+    
     leads_sheet.append_row(ligne)
 
 # === Récupérer la base montres (normalisée)
