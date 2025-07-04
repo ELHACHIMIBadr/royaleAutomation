@@ -29,11 +29,27 @@ leads_sheet = sh.worksheet(LEADS_SHEET_NAME)
 watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 
 # === Ajouter ligne dans Leads
-def append_to_leads(data: list):
+def append_to_leads(data: dict):
     today = datetime.now().strftime('%d/%m/%Y')
-    leads_sheet.append_row([today] + data)
+    ligne = [
+        today,
+        data.get("nom", ""),
+        data.get("tel", ""),
+        data.get("ville", ""),
+        data.get("adresse", ""),
+        0,  # coût de livraison
+        data.get("marque", ""),
+        data.get("gamme", ""),
+        data.get("finition", ""),
+        data.get("prix_achat", ""),
+        data.get("prix_vente", ""),
+        "Confirmé",
+        "",  # adresse complète ou autre
+        data.get("commentaire", "")
+    ]
+    leads_sheet.append_row(ligne)
 
-# === Récupérer base montres
+# === Récupérer base montres (normalisée pour le funnel intelligent)
 def get_watch_database():
     records = watch_db_sheet.get_all_records()
     normalized_records = []
@@ -46,4 +62,3 @@ def get_watch_database():
         normalized_records.append(normalized_row)
 
     return normalized_records
-
