@@ -1,6 +1,5 @@
 import logging
 import os
-import sys
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -11,8 +10,6 @@ from service_account import append_to_leads, get_watch_database
 # === Logger ===
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
 
 # === Environ ===
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -29,7 +26,7 @@ PORT = int(os.environ.get("PORT", 8443))
 watch_db = get_watch_database()
 
 # IDs autorisés à déclencher le bot
-AUTHORIZED_USERS = [5427202496, 1580306191]  # remplace-les par tes ID
+AUTHORIZED_USERS = [5427202496, 1580306191]
 
 # === Démarrage de la conversation ===
 async def start_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -60,10 +57,14 @@ async def get_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SEXE
 
 async def get_sexe(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    sexe = update.message.text.strip().lower()
-    logger.debug(f"[DEBUG] Sexe reçu : {sexe}")
+    if not update.message or not update.message.text:
+        await update.message.reply_text("Merci de choisir entre Homme ou Femme.")
+        return SEXE
 
-    if sexe not in ["homme", "femme"]:
+    sexe_input = update.message.text.strip().casefold()
+    logger.debug(f"[DEBUG] Sexe brut reçu : '{update.message.text}' → Normalisé : '{sexe_input}'")
+
+    if sexe_input not in ["homme", "femme"]:
         await update.message.reply_text(
             "❗ Merci de choisir *Homme* ou *Femme*.",
             reply_markup=ReplyKeyboardMarkup([["Homme", "Femme"]], one_time_keyboard=True),
@@ -71,10 +72,11 @@ async def get_sexe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return SEXE
 
-    context.user_data['sexe'] = sexe.capitalize()
+    context.user_data['sexe'] = "Homme" if sexe_input == "homme" else "Femme"
 
     marques = sorted(set(row['marque'] for row in watch_db))
     keyboard = [marques[i:i+2] for i in range(0, len(marques), 2)]
+
     await update.message.reply_text("⌚ Marque ?", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
     return MARQUE
 
@@ -122,22 +124,20 @@ async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Résumé final
     resume = (
         f"✅ Résumé de la commande :\n"
-        f"👤 Nom : {data.get('nom')}\n"
-        f"📞 Téléphone : {data.get('tel')}\n"
-        f"🏙️ Ville : {data.get('ville')}\n"
-        f"📍 Adresse : {data.get('adresse')}\n"
-        f"👥 Sexe : {data.get('sexe')}\n"
-        f"⌚ Marque : {data.get('marque')}\n"
-        f"📎 Gamme : {data.get('gamme')}\n"
-        f"🎨 Finition : {data.get('finition')}\n"
-        f"🎁 Boîte : {data.get('boite')}\n"
-        f"💰 Vente : {data.get('prix_vente')} | Achat : {prix_achat}"
+        f"👤 Nom : {data['nom']}\n"
+        f"📞 Téléphone : {data['tel']}\n"
+        f"🏙️ Ville : {data['ville']}\n"
+        f"📍 Adresse : {data['adresse']}\n"
+        f"👥 Sexe : {data['sexe']}\n"
+        f"⌚ Marque : {data['marque']}\n"
+        f"📎 Gamme : {data['gamme']}\n"
+        f"🎨 Finition : {data['finition']}\n"
+        f"🎁 Boîte : {data['boite']}\n"
+        f"💰 Vente : {data['prix_vente']} | Achat : {prix_achat}"
     )
 
     await update.message.reply_text(resume + "\n\n✅ Merci, la commande est enregistrée.")
 
-    # Insertion dans la feuille
-    logger.debug(f"[INSERT] Données insérées : {context.user_data}")
     append_to_leads(context.user_data)
     return ConversationHandler.END
 
