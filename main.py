@@ -6,10 +6,11 @@ from telegram.ext import (
     ContextTypes, ConversationHandler
 )
 from service_account import (
-    append_to_leads, get_watch_database,
+    append_bot_lead, get_watch_database,
     get_marques_by_sexe, get_modeles_by_sexe_marque,
     get_finitions, get_prix_achat
 )
+from woocommerce_orders import fetch_woocommerce_orders  # 🆕 Intégration WooCommerce
 
 # === Logger ===
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -108,7 +109,7 @@ async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data['marque'],
         data['modele'],
         data['finition'],
-        data['boite']  # ajout du prix boîte dans le calcul
+        data['boite']
     )
     context.user_data['prix_achat'] = prix_achat
 
@@ -136,14 +137,14 @@ async def get_commentaire(update: Update, context: ContextTypes.DEFAULT_TYPE):
         resume += f"\n📝 Commentaire : {data['commentaire']}"
 
     await update.message.reply_text(resume + "\n\n✅ Merci, la commande est enregistrée.")
-    append_to_leads(context.user_data)
+    append_bot_lead(context.user_data)
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Commande annulée.")
     return ConversationHandler.END
 
-def main():
+def launch_bot():
     app = Application.builder().token(BOT_TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -173,5 +174,10 @@ def main():
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
 
+# === Point d’entrée dynamique ===
 if __name__ == "__main__":
-    main()
+    # 🧠 Si variable TRIGGER_WOO définie → traitement WooCommerce uniquement
+    if os.environ.get("TRIGGER_WOO") == "1":
+        fetch_woocommerce_orders()
+    else:
+        launch_bot()
