@@ -23,8 +23,8 @@ PORT = int(os.environ.get("PORT", 8443))
 # === States ===
 (
     NOM, TEL, VILLE, ADRESSE, SEXE,
-    MARQUE, MODELE, FINITION, BOITE, PRIX_VENTE
-) = range(10)
+    MARQUE, MODELE, FINITION, BOITE, PRIX_VENTE, COMMENTAIRE
+) = range(11)
 
 # Charger la base montres
 watch_db = get_watch_database()
@@ -32,7 +32,8 @@ watch_db = get_watch_database()
 # IDs autorisés à déclencher le bot
 AUTHORIZED_USERS = [5427202496, 1580306191]
 
-# === Démarrage de la conversation ===
+# === Étapes de la conversation ===
+
 async def start_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in AUTHORIZED_USERS:
@@ -65,7 +66,6 @@ async def get_sexe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if sexe not in ["Homme", "Femme"]:
         await update.message.reply_text("❗ Choix invalide. Merci de choisir Homme ou Femme.")
         return SEXE
-
     context.user_data['sexe'] = sexe
     marques = get_marques_by_sexe(watch_db, sexe)
     keyboard = [marques[i:i+2] for i in range(0, len(marques), 2)]
@@ -112,7 +112,14 @@ async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     context.user_data['prix_achat'] = prix_achat
 
-    # Résumé
+    # Demander un commentaire
+    await update.message.reply_text("📝 Un commentaire (facultatif) ? (ex: livraison le vendredi 05/07)")
+    return COMMENTAIRE
+
+async def get_commentaire(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data['commentaire'] = update.message.text
+    data = context.user_data
+
     resume = (
         f"✅ Résumé de la commande :\n"
         f"👤 Nom : {data['nom']}\n"
@@ -124,8 +131,10 @@ async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📎 Modèle : {data['modele']}\n"
         f"🎨 Finition : {data['finition']}\n"
         f"🎁 Boîte : {data['boite']}\n"
-        f"💰 Vente : {data['prix_vente']} | Achat : {prix_achat}"
+        f"💰 Vente : {data['prix_vente']} | Achat : {data['prix_achat']}"
     )
+    if data.get("commentaire"):
+        resume += f"\n📝 Commentaire : {data['commentaire']}"
 
     await update.message.reply_text(resume + "\n\n✅ Merci, la commande est enregistrée.")
     append_to_leads(context.user_data)
@@ -151,6 +160,7 @@ def main():
             FINITION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_finition)],
             BOITE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_boite)],
             PRIX_VENTE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_prix_vente)],
+            COMMENTAIRE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_commentaire)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
