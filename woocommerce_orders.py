@@ -1,8 +1,12 @@
 # woocommerce_orders.py
 
 import requests
-from datetime import datetime, timedelta
-from service_account import get_watch_database, get_leads_data, append_to_leads
+from datetime import datetime
+from service_account import (
+    get_watch_database,
+    get_leads_data,
+    append_woocommerce_lead
+)
 
 # === WooCommerce config ===
 STORE_URL = "https://royaleheure.com"
@@ -13,7 +17,7 @@ API_URL = f"{STORE_URL}/wp-json/wc/v3/orders"
 def fetch_woocommerce_orders():
     print("📦 Récupération des commandes WooCommerce du jour...")
 
-    # Récupérer les commandes passées aujourd’hui uniquement
+    # Récupérer uniquement les commandes d'aujourd'hui
     today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_iso = today.isoformat()
 
@@ -32,7 +36,7 @@ def fetch_woocommerce_orders():
     leads_data = get_leads_data()
 
     for order in orders:
-        # Extraire infos client
+        # Extraire les infos client
         nom_client = f"{order['billing']['first_name']} {order['billing']['last_name']}".strip()
         numero = order['billing'].get('phone', '').strip()
         ville = order['billing'].get('city', '').strip()
@@ -48,7 +52,7 @@ def fetch_woocommerce_orders():
 
         # Matching produit dans la base RH
         matched_watch = next(
-            (item for item in watch_db if item.get('nom sur woocommerce', '').strip() == produit_nom),
+            (item for item in watch_db if item.get('nom_sur_woocommerce', '').strip() == produit_nom),
             None
         )
 
@@ -56,12 +60,12 @@ def fetch_woocommerce_orders():
             print(f"⚠️ Produit non reconnu dans la base RH : {produit_nom}")
             continue
 
-        # Vérification anti-doublon sur la même journée
+        # Vérification anti-doublon (même jour, même client, même produit)
         already_exists = any(
-            row.get('Nom', '').strip() == nom_client and
+            row.get('Nom', '').strip().lower() == nom_client.lower() and
             row.get('Numéro', '').strip() == numero and
-            row.get('Gamme', '').strip() == matched_watch.get('modele', '').strip() and
-            row.get('Finition', '').strip() == matched_watch.get('finition', '').strip() and
+            row.get('Gamme', '').strip().lower() == matched_watch.get('modele', '').strip().lower() and
+            row.get('Finition', '').strip().lower() == matched_watch.get('finition', '').strip().lower() and
             row.get('Date', '').strip() == date_commande
             for row in leads_data
         )
@@ -81,11 +85,11 @@ def fetch_woocommerce_orders():
             'Marque': matched_watch.get('marque', ''),
             'Gamme': matched_watch.get('modele', ''),
             'Finition': matched_watch.get('finition', ''),
-            'Prix achat': matched_watch.get('prix achat montre', ''),
+            'Prix achat': matched_watch.get('prix_achat_montre', ''),
             'Prix vente': prix_vente,
             'Statut': 'À confirmer',
             'Commentaire': 'Commande WooCommerce'
         }
 
-        append_to_leads(row)
+        append_woocommerce_lead(row)
         print(f"✅ Commande insérée : {nom_client} | {produit_nom}")
