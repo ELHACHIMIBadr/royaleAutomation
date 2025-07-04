@@ -31,29 +31,28 @@ watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 # === Ajouter une ligne dans Leads avec incrémentation automatique
 def append_to_leads(data: dict):
     today = datetime.now().strftime('%d/%m/%Y')
-    
+
     # Incrémentation automatique du n° client
     existing_rows = leads_sheet.get_all_values()
     next_id = len(existing_rows)  # en comptant l'en-tête
 
     ligne = [
-        next_id,                        # n client
-        today,                          # Date
+        today,                          # ✅ Date en 1er
+        next_id,                        # ✅ n° client en 2e
         data.get("nom", ""),            # Nom
         data.get("tel", ""),            # Numéro
         data.get("ville", ""),          # Ville
         data.get("adresse", ""),        # Adresse
         0,                              # Coût de livraison
-        data.get("marque", ""),         # Marque
-        data.get("modele", ""),         # Modèle
+        data.get("marque", ""),         # Montre
+        data.get("modele", ""),         # Gamme (Modèle)
         data.get("finition", ""),       # Finition
-        data.get("prix_achat", ""),     # Prix d'achat (incluant boîte)
+        data.get("prix_achat", ""),     # Prix d'achat
         data.get("prix_vente", ""),     # Prix de vente
         "Confirmé",                     # Statut
-        "",                             # Adresse complète
-        data.get("commentaire", "")     # Commentaire
+        data.get("commentaire", "")     # ✅ Commentaire aligné
     ]
-    
+
     leads_sheet.append_row(ligne)
 
 # === Récupérer la base montres (normalisée)
