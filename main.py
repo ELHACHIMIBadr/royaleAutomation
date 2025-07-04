@@ -57,7 +57,13 @@ async def get_adresse(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SEXE
 
 async def get_sexe(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['sexe'] = update.message.text
+    sexe = update.message.text.strip().capitalize()
+    if sexe not in ["Homme", "Femme"]:
+        await update.message.reply_text("👤 Merci de choisir entre 'Homme' ou 'Femme'.", reply_markup=ReplyKeyboardMarkup([["Homme", "Femme"]], one_time_keyboard=True))
+        logger.info(f"[WARNING] Valeur sexe invalide reçue : {sexe}")
+        return SEXE
+
+    context.user_data['sexe'] = sexe
     marques = sorted(set(row['marque'] for row in watch_db))
     keyboard = [marques[i:i+2] for i in range(0, len(marques), 2)]
     await update.message.reply_text("⌚ Marque ?", reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True))
