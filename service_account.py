@@ -61,7 +61,8 @@ def get_watch_database():
         normalized_records.append(normalized_row)
     return normalized_records
 
-# === Étapes dynamiques du funnel ===
+# === Funnel dynamique ===
+
 def get_marques_by_sexe(watch_db, sexe):
     return sorted(set(
         row['marque'] for row in watch_db
