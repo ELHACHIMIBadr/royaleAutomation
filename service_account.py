@@ -9,18 +9,22 @@ SPREADSHEET_NAME = 'Commande Royale Heure'
 LEADS_SHEET_NAME = 'Leads'
 WATCH_DB_SHEET_NAME = 'Base de données montres RH'
 
-# === Lecture depuis le fichier secret fourni par Render
-with open('/etc/secrets/royaleheurebot-cd5722cbdc55', 'r') as f:
+# === Lecture du fichier JSON depuis Render Secret Mount
+with open('/etc/secrets/royaleheurebot-cd5722cbdc55.json', 'r') as f:
     creds_dict = json.load(f)
 
-# === Création des credentials
-scopes = ['https://www.googleapis.com/auth/spreadsheets']
-credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+# === Scopes requis (Sheets + Drive pour open() par nom)
+scopes = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/drive',
+]
 
-# === Connexion à Google Sheets
+# === Création des credentials et autorisation
+credentials = Credentials.from_service_account_info(creds_dict, scopes=scopes)
 gc = gspread.authorize(credentials)
 sh = gc.open(SPREADSHEET_NAME)
 
+# === Accès aux feuilles
 leads_sheet = sh.worksheet(LEADS_SHEET_NAME)
 watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 
