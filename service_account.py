@@ -35,4 +35,15 @@ def append_to_leads(data: list):
 
 # === Récupérer base montres
 def get_watch_database():
-    return watch_db_sheet.get_all_records()
+    records = watch_db_sheet.get_all_records()
+    normalized_records = []
+
+    for row in records:
+        normalized_row = {
+            key.strip().lower().replace(" ", "_"): value
+            for key, value in row.items()
+        }
+        normalized_records.append(normalized_row)
+
+    return normalized_records
+
