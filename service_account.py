@@ -35,7 +35,7 @@ def append_to_leads(data: dict):
     # Incrémentation automatique du n° client
     existing_rows = leads_sheet.get_all_values()
     next_id = len(existing_rows)  # en comptant l'en-tête
-    
+
     ligne = [
         next_id,                        # n client
         today,                          # Date
@@ -44,10 +44,10 @@ def append_to_leads(data: dict):
         data.get("ville", ""),          # Ville
         data.get("adresse", ""),        # Adresse
         0,                              # Coût de livraison
-        data.get("marque", ""),         # Montre
+        data.get("marque", ""),         # Marque
         data.get("modele", ""),         # Modèle
         data.get("finition", ""),       # Finition
-        data.get("prix_achat", ""),     # Prix d'achat
+        data.get("prix_achat", ""),     # Prix d'achat (incluant boîte)
         data.get("prix_vente", ""),     # Prix de vente
         "Confirmé",                     # Statut
         "",                             # Adresse complète
@@ -91,7 +91,8 @@ def get_finitions(watch_db, sexe, marque, modele):
         and row['modèle'].lower() == modele.lower()
     ))
 
-def get_prix_achat(watch_db, sexe, marque, modele, finition):
+# === Calcul du prix d'achat total (montre + boîte)
+def get_prix_achat(watch_db, sexe, marque, modele, finition, boite):
     for row in watch_db:
         if (
             row['sexe'].lower() == sexe.lower()
@@ -99,5 +100,17 @@ def get_prix_achat(watch_db, sexe, marque, modele, finition):
             and row['modèle'].lower() == modele.lower()
             and row['finition'].lower() == finition.lower()
         ):
-            return row.get('prix_achat_montre', '')
+            base = row.get('prix_achat_montre', 0)
+            if boite.lower() == "simple":
+                supplement = row.get('prix_boite_simple', 0)
+            elif boite.lower() == "originale":
+                supplement = row.get('prix_boite_original', 0)
+            else:
+                supplement = 0
+
+            try:
+                return float(base) + float(supplement)
+            except:
+                return base  # fallback en cas d'erreur
+
     return ''
