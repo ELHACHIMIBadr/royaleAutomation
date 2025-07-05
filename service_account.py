@@ -120,8 +120,8 @@ def get_leads_data():
     records = leads_sheet.get_all_records()
     return records
 
-# === LEADS SHEET - Insertion WooCommerce (sans numéro client)
-def append_woocommerce_lead(row_data: dict):
+# === LEADS SHEET - Insertion WooCommerce (renommée)
+def append_woocommerce_order_to_leads(row_data: dict):
     """Ajoute une ligne dans le Google Sheet 'Leads' sans numéro client (WooCommerce uniquement)"""
     ligne = [
         row_data.get("Date", ""),            # ✅ Date
@@ -132,7 +132,7 @@ def append_woocommerce_lead(row_data: dict):
         row_data.get("Adresse", ""),         # Adresse
         0,                                   # Coût de livraison
         row_data.get("Marque", ""),          # Marque
-        row_data.get("Gamme", ""),           # Gamme / Modèle
+        row_data.get("Modèle", ""),          # 🛠️ Corrected key
         row_data.get("Finition", ""),        # Finition
         row_data.get("Prix achat", ""),      # Prix d'achat
         row_data.get("Prix vente", ""),      # Prix de vente
