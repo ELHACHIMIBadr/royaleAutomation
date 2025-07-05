@@ -1,0 +1,38 @@
+# === Python général ===
+__pycache__/
+*.py[cod]
+*.log
+*.sqlite3
+*.env
+*.DS_Store
+
+# === Fichier de configuration secrets ===
+royaleheurebot-*.json
+
+# === Environnement virtuel local ===
+.venv/
+env/
+venv/
+
+# === IDEs ===
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# === Déploiement Render (optionnel) ===
+build/
+*.egg-info/
+
+# === Fichiers cache pip/pytest ===
+pip-log.txt
+pip-delete-this-directory.txt
+.cache/
+coverage/
+htmlcov/
+.tox/
+
+# === OS ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
