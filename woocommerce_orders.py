@@ -1,97 +1,92 @@
-
-import logging
+import os
+import requests
+from datetime import datetime
 from service_account import (
-    get_watch_database,
-    get_leads_data,
-    append_woocommerce_order_to_leads
+    get_leads_data, append_woocommerce_lead,
+    get_watch_database, get_prix_achat
 )
 
-logger = logging.getLogger(__name__)
+# === Chargement de la base produit
+watch_db = get_watch_database()
 
-def process_woocommerce_orders():
-    try:
-        logger.info("[WooCommerce Worker] 🚀 Démarrage du traitement des commandes WooCommerce")
+# === API WooCommerce
+WC_BASE_URL = os.environ.get("WC_BASE_URL")
+WC_KEY = os.environ.get("WC_KEY")
+WC_SECRET = os.environ.get("WC_SECRET")
 
-        # Base de données montres RH
-        watch_db = get_watch_database()
-        leads_data = get_leads_data()
-        last_client_number = 0
+# === Construit une requête vers WooCommerce (commandes)
+def fetch_woocommerce_orders():
+    url = f"{WC_BASE_URL}/wp-json/wc/v3/orders"
+    auth = (WC_KEY, WC_SECRET)
+    params = {
+        "per_page": 20,
+        "orderby": "date",
+        "order": "desc"
+    }
 
-        if leads_data:
-            try:
-                last_client_number = int(leads_data[-1].get("n client", 0))
-            except Exception:
-                last_client_number = 0
+    response = requests.get(url, auth=auth, params=params)
+    orders = response.json()
 
-        # Simule les commandes WooCommerce ici
-        commandes = [
-            {
-                "nom": "Charame Abdelmejid",
-                "numero": "0661624792",
-                "ville": "cityTestMock",
-                "adresse": "Kenitra",
-                "commentaire": "Commande WooCommerce",
-                "prix_vente": 450,
-                "statut": "À confirmer",
-                "boite": "Simple",
-                "nom_woocommerce": "Cartier Ballon Bleu 33mm - Rose"
-            },
-            {
-                "nom": "Hamza",
-                "numero": "0633823315",
-                "ville": "cityTestMock",
-                "adresse": "Bd ahmed mekouar res ritaje ain sebaa casablanca",
-                "commentaire": "Commande WooCommerce",
-                "prix_vente": 550,
-                "statut": "À confirmer",
-                "boite": "Originale",
-                "nom_woocommerce": "Cartier Ballon Bleu 33mm - Argent"
-            }
-        ]
+    existing_leads = get_leads_data()
+    existing_phones = {lead.get("Numéro") for lead in existing_leads}
 
-        for i, ligne in enumerate(commandes):
-            nom_woo = str(ligne.get("nom_woocommerce", "")).strip()
-            boite_type = str(ligne.get("boite", "Simple")).strip().capitalize()
+    for order in orders:
+        # Informations client
+        billing = order.get("billing", {})
+        nom = billing.get("first_name", "") + " " + billing.get("last_name", "")
+        tel = billing.get("phone", "").strip()
+        ville = billing.get("city", "")
+        adresse = billing.get("address_1", "")
 
-            # Rechercher la montre correspondante
-            match = next(
-                (w for w in watch_db if str(w.get("nom sur woocommerce", "")).strip().lower() == nom_woo.lower()),
-                None
-            )
+        if tel in existing_phones:
+            continue  # déjà traité
 
-            if not match:
-                logger.warning(f"🔍 Aucun match trouvé pour '{nom_woo}'")
-                continue
+        # Récupération des données produit
+        items = order.get("line_items", [])
+        if not items:
+            continue
 
-            # Extraire infos depuis base montres RH
-            marque = match.get("marque", "")
-            modele = match.get("modèle", "")  # ✅ Correction ici
-            finition = match.get("finition", "")
-            prix_achat_base = float(match.get("prix achat montre", 0))
-            prix_boite = float(match.get("prix boite simple", 0)) if boite_type == "Simple" else float(match.get("prix boite original", 0))
-            prix_achat = prix_achat_base + prix_boite
+        produit = items[0]
+        produit_name = produit.get("name", "")
 
-            # Construction de la ligne à insérer
-            ligne_sheet = {
-                "date": None,  # sera ajouté dans append
-                "n client": last_client_number + i + 1,
-                "nom": ligne.get("nom", ""),
-                "numéro": str(ligne.get("numero", "")),
-                "ville": ligne.get("ville", ""),
-                "adresse": ligne.get("adresse", ""),
-                "cout de livraison": 0,
-                "montre": marque,
-                "gamme": modele,
-                "finition": finition,
-                "prix d'achat": prix_achat,
-                "prix de vente": ligne.get("prix_vente", 0),
-                "statut": ligne.get("statut", "À confirmer"),
-                "commentaire": ligne.get("commentaire", ""),
-            }
+        # Déduction des champs depuis le nom du produit
+        marque = ""
+        modele = ""
+        finition = ""
+        for row in watch_db:
+            if row['produit'].lower() in produit_name.lower():
+                marque = row['marque']
+                modele = row['modèle']  # ✅ Correction : on mappe "modèle" pas "gamme"
+                finition = row['finition']
+                break
 
-            append_woocommerce_order_to_leads(ligne_sheet)
+        if not all([marque, modele, finition]):
+            continue  # Si on ne peut pas mapper correctement, on ignore
 
-        logger.info("[WooCommerce Worker] ✅ Commandes WooCommerce ajoutées avec succès")
+        # Calcul du prix d’achat avec "Simple" par défaut
+        prix_achat = get_prix_achat(
+            watch_db,
+            row.get('sexe', 'Homme'),  # fallback
+            marque,
+            modele,
+            finition,
+            "Simple"
+        )
 
-    except Exception as e:
-        logger.error(f"[WooCommerce Worker] ❌ Erreur : {e}")
+        # Insertion dans Google Sheets
+        ligne = {
+            "Date": datetime.now().strftime('%d/%m/%Y'),
+            "Nom": nom,
+            "Numéro": tel,
+            "Ville": ville,
+            "Adresse": adresse,
+            "Marque": marque,
+            "Gamme": modele,           # ✅ correspond à la colonne Modèle dans la base
+            "Finition": finition,
+            "Prix achat": prix_achat,
+            "Prix vente": order.get("total", ""),
+            "Statut": "À confirmer",
+            "Commentaire": f"Commande WooCommerce #{order.get('id')}"
+        }
+
+        append_woocommerce_lead(ligne)
