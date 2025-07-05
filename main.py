@@ -35,7 +35,7 @@ watch_db = get_watch_database()
 # IDs autorisés à déclencher le bot
 AUTHORIZED_USERS = [5427202496, 1580306191]
 
-# === Étapes de la conversation ===
+# === Étapes conversation Telegram ===
 
 async def start_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -186,12 +186,12 @@ def start_woocommerce_worker():
                 logger.info("[WooCommerce Worker] ✅ Import terminé")
             except Exception as e:
                 logger.error(f"[WooCommerce Worker] ❌ Erreur : {e}")
-            time.sleep(300)  # Attente 5 minutes
+            time.sleep(300)  # toutes les 5 minutes
 
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
 
-# === Point d’entrée principal
+# === Main
 if __name__ == "__main__":
-    start_woocommerce_worker()  # 🔁 Lance le thread WooCommerce
-    launch_bot()                # 🤖 Lance le bot Telegram
+    start_woocommerce_worker()  # 🔁 Thread WooCommerce
+    launch_bot()                # 🤖 Bot Telegram
