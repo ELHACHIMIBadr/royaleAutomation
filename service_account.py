@@ -31,31 +31,50 @@ watch_db_sheet = sh.worksheet(WATCH_DB_SHEET_NAME)
 # === BOT TELEGRAM : Ajouter une ligne dans Leads avec incrémentation automatique
 def append_bot_lead(data: dict):
     today = datetime.now().strftime('%d/%m/%Y')
-
-    # Incrémentation automatique du n° client
     existing_rows = leads_sheet.get_all_values()
     next_id = len(existing_rows)  # en comptant l'en-tête
 
     ligne = [
-        today,                          # ✅ Date en 1er
-        next_id,                        # ✅ n° client en 2e
-        data.get("nom", ""),            # Nom
-        data.get("tel", ""),            # Numéro
-        data.get("ville", ""),          # Ville
-        data.get("adresse", ""),        # Adresse
-        0,                              # Coût de livraison
-        data.get("marque", ""),         # Montre
-        data.get("modele", ""),         # Gamme (Modèle)
-        data.get("finition", ""),       # Finition
-        data.get("prix_achat", ""),     # Prix d'achat
-        data.get("prix_vente", ""),     # Prix de vente
-        "Confirmé",                     # Statut
-        data.get("commentaire", "")     # ✅ Commentaire aligné
+        today,                          # ✅ Date
+        next_id,                        # ✅ n° client
+        data.get("nom", ""),
+        data.get("tel", ""),
+        data.get("ville", ""),
+        data.get("adresse", ""),
+        0,
+        data.get("marque", ""),
+        data.get("modele", ""),         # Modèle
+        data.get("finition", ""),
+        data.get("prix_achat", ""),
+        data.get("prix_vente", ""),
+        "Confirmé",
+        data.get("commentaire", "")
     ]
 
     leads_sheet.append_row(ligne)
 
-# === WATCH RH : Récupérer la base montres (normalisée)
+# === WooCommerce : Ajouter une ligne dans Leads (sans numéro client)
+def append_woocommerce_lead(row_data: dict):
+    ligne = [
+        row_data.get("Date", ""),
+        "",  # n° client vide
+        row_data.get("Nom", ""),
+        row_data.get("Numéro", ""),
+        row_data.get("Ville", ""),
+        row_data.get("Adresse", ""),
+        0,
+        row_data.get("Marque", ""),
+        row_data.get("Modèle", ""),  # ✅ Clé correcte ici
+        row_data.get("Finition", ""),
+        row_data.get("Prix achat", ""),
+        row_data.get("Prix vente", ""),
+        row_data.get("Statut", ""),
+        row_data.get("Commentaire", "")
+    ]
+
+    leads_sheet.append_row(ligne)
+
+# === WATCH RH : Récupérer la base montres
 def get_watch_database():
     records = watch_db_sheet.get_all_records()
     normalized_records = []
@@ -67,8 +86,7 @@ def get_watch_database():
         normalized_records.append(normalized_row)
     return normalized_records
 
-# === FUNNEL DYNAMIQUE ===
-
+# === FUNNEL DYNAMIQUE
 def get_marques_by_sexe(watch_db, sexe):
     return sorted(set(
         row['marque'] for row in watch_db
@@ -110,34 +128,11 @@ def get_prix_achat(watch_db, sexe, marque, modele, finition, boite):
             try:
                 return float(base) + float(supplement)
             except:
-                return base  # fallback en cas d'erreur
+                return base
 
     return ''
 
-# === LEADS SHEET - Lecture pour vérification WooCommerce
+# === Récupération des données actuelles pour vérification des doublons WooCommerce
 def get_leads_data():
-    """Récupère toutes les lignes existantes du Google Sheet 'Leads' sous forme de dictionnaires"""
     records = leads_sheet.get_all_records()
     return records
-
-# === LEADS SHEET - Insertion WooCommerce (renommée)
-def append_woocommerce_order_to_leads(row_data: dict):
-    """Ajoute une ligne dans le Google Sheet 'Leads' sans numéro client (WooCommerce uniquement)"""
-    ligne = [
-        row_data.get("Date", ""),            # ✅ Date
-        "",                                  # 🚫 n° client vide
-        row_data.get("Nom", ""),             # Nom
-        row_data.get("Numéro", ""),          # Numéro
-        row_data.get("Ville", ""),           # Ville
-        row_data.get("Adresse", ""),         # Adresse
-        0,                                   # Coût de livraison
-        row_data.get("Marque", ""),          # Marque
-        row_data.get("Modèle", ""),          # 🛠️ Corrected key
-        row_data.get("Finition", ""),        # Finition
-        row_data.get("Prix achat", ""),      # Prix d'achat
-        row_data.get("Prix vente", ""),      # Prix de vente
-        row_data.get("Statut", ""),          # Statut (ex: À confirmer)
-        row_data.get("Commentaire", "")      # Commentaire
-    ]
-
-    leads_sheet.append_row(ligne)
