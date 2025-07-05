@@ -1,95 +1,97 @@
-# woocommerce_orders.py
 
-import requests
-from datetime import datetime
+import logging
 from service_account import (
     get_watch_database,
     get_leads_data,
-    append_woocommerce_lead
+    append_woocommerce_order_to_leads
 )
 
-# === WooCommerce config ===
-STORE_URL = "https://royaleheure.com"
-CONSUMER_KEY = "ck_7bc8553017932c95d0b4cb04caba6998ebf61979"
-CONSUMER_SECRET = "cs_c14cfac8daf38dcee3848290a1a79998d58943d1"
-API_URL = f"{STORE_URL}/wp-json/wc/v3/orders"
+logger = logging.getLogger(__name__)
 
-def fetch_woocommerce_orders():
-    print("📦 Récupération des commandes WooCommerce du jour...")
+def process_woocommerce_orders():
+    try:
+        logger.info("[WooCommerce Worker] 🚀 Démarrage du traitement des commandes WooCommerce")
 
-    # Récupérer uniquement les commandes d'aujourd'hui
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_iso = today.isoformat()
+        # Base de données montres RH
+        watch_db = get_watch_database()
+        leads_data = get_leads_data()
+        last_client_number = 0
 
-    response = requests.get(
-        API_URL,
-        auth=(CONSUMER_KEY, CONSUMER_SECRET),
-        params={"per_page": 100, "orderby": "date", "order": "desc", "after": today_iso}
-    )
+        if leads_data:
+            try:
+                last_client_number = int(leads_data[-1].get("n client", 0))
+            except Exception:
+                last_client_number = 0
 
-    if response.status_code != 200:
-        print("❌ Erreur API WooCommerce :", response.status_code, response.text)
-        return
+        # Simule les commandes WooCommerce ici
+        commandes = [
+            {
+                "nom": "Charame Abdelmejid",
+                "numero": "0661624792",
+                "ville": "cityTestMock",
+                "adresse": "Kenitra",
+                "commentaire": "Commande WooCommerce",
+                "prix_vente": 450,
+                "statut": "À confirmer",
+                "boite": "Simple",
+                "nom_woocommerce": "Cartier Ballon Bleu 33mm - Rose"
+            },
+            {
+                "nom": "Hamza",
+                "numero": "0633823315",
+                "ville": "cityTestMock",
+                "adresse": "Bd ahmed mekouar res ritaje ain sebaa casablanca",
+                "commentaire": "Commande WooCommerce",
+                "prix_vente": 550,
+                "statut": "À confirmer",
+                "boite": "Originale",
+                "nom_woocommerce": "Cartier Ballon Bleu 33mm - Argent"
+            }
+        ]
 
-    orders = response.json()
-    watch_db = get_watch_database()
-    leads_data = get_leads_data()
+        for i, ligne in enumerate(commandes):
+            nom_woo = str(ligne.get("nom_woocommerce", "")).strip()
+            boite_type = str(ligne.get("boite", "Simple")).strip().capitalize()
 
-    for order in orders:
-        # Extraire les infos client
-        nom_client = f"{order['billing']['first_name']} {order['billing']['last_name']}".strip()
-        numero = order['billing'].get('phone', '').strip()
-        ville = order['billing'].get('city', '').strip()
-        adresse = order['billing'].get('address_1', '').strip()
-        prix_vente = float(order['total'])
-        date_commande = datetime.strptime(order['date_created'][:10], "%Y-%m-%d").strftime("%d/%m/%Y")
+            # Rechercher la montre correspondante
+            match = next(
+                (w for w in watch_db if str(w.get("nom sur woocommerce", "")).strip().lower() == nom_woo.lower()),
+                None
+            )
 
-        if not order['line_items']:
-            print(f"⚠️ Commande sans produit : {order['id']}")
-            continue
+            if not match:
+                logger.warning(f"🔍 Aucun match trouvé pour '{nom_woo}'")
+                continue
 
-        produit_nom = order['line_items'][0]['name'].strip()
+            # Extraire infos depuis base montres RH
+            marque = match.get("marque", "")
+            modele = match.get("modèle", "")  # ✅ Correction ici
+            finition = match.get("finition", "")
+            prix_achat_base = float(match.get("prix achat montre", 0))
+            prix_boite = float(match.get("prix boite simple", 0)) if boite_type == "Simple" else float(match.get("prix boite original", 0))
+            prix_achat = prix_achat_base + prix_boite
 
-        # Matching produit dans la base RH
-        matched_watch = next(
-            (item for item in watch_db if item.get('nom_sur_woocommerce', '').strip() == produit_nom),
-            None
-        )
+            # Construction de la ligne à insérer
+            ligne_sheet = {
+                "date": None,  # sera ajouté dans append
+                "n client": last_client_number + i + 1,
+                "nom": ligne.get("nom", ""),
+                "numéro": str(ligne.get("numero", "")),
+                "ville": ligne.get("ville", ""),
+                "adresse": ligne.get("adresse", ""),
+                "cout de livraison": 0,
+                "montre": marque,
+                "gamme": modele,
+                "finition": finition,
+                "prix d'achat": prix_achat,
+                "prix de vente": ligne.get("prix_vente", 0),
+                "statut": ligne.get("statut", "À confirmer"),
+                "commentaire": ligne.get("commentaire", ""),
+            }
 
-        if not matched_watch:
-            print(f"⚠️ Produit non reconnu dans la base RH : {produit_nom}")
-            continue
+            append_woocommerce_order_to_leads(ligne_sheet)
 
-        # Vérification anti-doublon (même jour, même client, même produit)
-        already_exists = any(
-            row.get('Nom', '').strip().lower() == nom_client.lower() and
-            row.get('Numéro', '').strip() == numero and
-            row.get('Gamme', '').strip().lower() == matched_watch.get('modele', '').strip().lower() and
-            row.get('Finition', '').strip().lower() == matched_watch.get('finition', '').strip().lower() and
-            row.get('Date', '').strip() == date_commande
-            for row in leads_data
-        )
+        logger.info("[WooCommerce Worker] ✅ Commandes WooCommerce ajoutées avec succès")
 
-        if already_exists:
-            print(f"⛔ Doublon ignoré : {nom_client} | {produit_nom}")
-            continue
-
-        # Construction de la ligne à insérer
-        row = {
-            'Date': date_commande,
-            'Nom': nom_client,
-            'Numéro': numero,
-            'Ville': ville,
-            'Adresse': adresse,
-            'Sexe': matched_watch.get('sexe', ''),
-            'Marque': matched_watch.get('marque', ''),
-            'Gamme': matched_watch.get('modele', ''),
-            'Finition': matched_watch.get('finition', ''),
-            'Prix achat': matched_watch.get('prix_achat_montre', ''),
-            'Prix vente': prix_vente,
-            'Statut': 'À confirmer',
-            'Commentaire': 'Commande WooCommerce'
-        }
-
-        append_woocommerce_lead(row)
-        print(f"✅ Commande insérée : {nom_client} | {produit_nom}")
+    except Exception as e:
+        logger.error(f"[WooCommerce Worker] ❌ Erreur : {e}")
