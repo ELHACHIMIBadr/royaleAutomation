@@ -180,9 +180,18 @@ flask_app = Flask(__name__)
 def woocommerce_webhook():
     if request.method == 'GET':
         return "✅ Webhook actif (GET reçu)", 200
-    data = request.get_json()
+
+    try:
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+    except Exception as e:
+        return f"❌ Erreur lors de la lecture du corps : {e}", 400
+
     handle_woocommerce_webhook(data)
     return "✅ Webhook reçu (POST)", 200
+
 
 # === Main
 if __name__ == "__main__":
