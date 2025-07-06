@@ -195,3 +195,30 @@ def start_woocommerce_worker():
 if __name__ == "__main__":
     start_woocommerce_worker()  # 🔁 Thread WooCommerce
     launch_bot()                # 🤖 Bot Telegram
+
+# ... tout ton code reste inchangé jusqu'au bloc final ...
+
+# === Main
+if __name__ == "__main__":
+    start_woocommerce_worker()  # 🔁 Thread WooCommerce
+
+    # Démarrage en parallèle de Flask et du bot Telegram
+    def run_bot():
+        launch_bot()
+
+    def run_flask():
+        from flask import Flask, request
+        from woocommerce_orders import handle_woocommerce_webhook
+
+        flask_app = Flask(__name__)
+
+        @flask_app.route('/woocommerce/webhook', methods=['POST'])
+        def woocommerce_webhook():
+            data = request.get_json()
+            handle_woocommerce_webhook(data)
+            return "OK", 200
+
+        flask_app.run(host="0.0.0.0", port=5000)
+
+    threading.Thread(target=run_flask, daemon=True).start()
+    run_bot()
