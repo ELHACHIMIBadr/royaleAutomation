@@ -186,11 +186,14 @@ if __name__ == "__main__":
 
         flask_app = Flask(__name__)
 
-        @flask_app.route('/woocommerce/webhook', methods=['POST'])
-        def woocommerce_webhook():
-            data = request.get_json()
-            handle_woocommerce_webhook(data)
-            return "OK", 200
+       @flask_app.route('/woocommerce/webhook', methods=['GET', 'POST'])
+def woocommerce_webhook():
+    if request.method == 'GET':
+        return "✅ Webhook actif (GET reçu)", 200
+    data = request.get_json()
+    handle_woocommerce_webhook(data)
+    return "✅ Webhook reçu (POST)", 200
+
 
         flask_app.run(host="0.0.0.0", port=5000)
 
