@@ -149,10 +149,10 @@ def woocommerce_webhook():
     if request.method == 'GET':
         return "✅ Webhook actif (GET reçu)", 200
     try:
-        if request.is_json:
-            data = request.get_json()
-        else:
+        data = request.get_json(silent=True)
+        if not data:
             data = request.form.to_dict()
+        print("📦 Webhook reçu :", data)
     except Exception as e:
         return f"❌ Erreur lecture corps : {e}", 400
 
