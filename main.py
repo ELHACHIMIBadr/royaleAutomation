@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import asyncio
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -34,7 +35,6 @@ watch_db = get_watch_database()
 AUTHORIZED_USERS = [5427202496, 1580306191]
 
 # === Étapes conversation Telegram ===
-
 async def start_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in AUTHORIZED_USERS:
@@ -144,6 +144,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # === Bot Telegram ===
 def launch_bot():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     app = Application.builder().token(BOT_TOKEN).build()
     conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.TEXT & filters.ChatType.GROUPS, start_conv)],
@@ -163,9 +166,11 @@ def launch_bot():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(conv_handler)
+
+    # Lancer sur un port différent de Flask (pas 5000)
     app.run_webhook(
         listen="0.0.0.0",
-        port=PORT,
+        port=8443,
         url_path=BOT_TOKEN,
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
@@ -191,7 +196,6 @@ def woocommerce_webhook():
 
     handle_woocommerce_webhook(data)
     return "✅ Webhook reçu (POST)", 200
-
 
 # === Main
 if __name__ == "__main__":
