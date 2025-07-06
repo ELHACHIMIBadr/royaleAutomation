@@ -1,3 +1,4 @@
+from dateutil import parser
 
 # === Gère l'incrémentation du champ "n client"
 def get_next_client_number(leads):
@@ -13,7 +14,7 @@ def get_next_client_number(leads):
 
 import os
 import requests
-from datetime import datetime
+from datetime import datetime, date
 from service_account import (
     get_leads_data, append_woocommerce_lead,
     get_watch_database, get_prix_achat
@@ -42,7 +43,11 @@ def fetch_woocommerce_orders():
     existing_leads = get_leads_data()
     existing_phones = {lead.get("Numéro") for lead in existing_leads}
 
+    today = date.today()
     for order in orders:
+        order_date = parser.parse(order.get('date_created')).date()
+        if order_date != today:
+            continue
         billing = order.get("billing", {})
         nom = billing.get("first_name", "") + " " + billing.get("last_name", "")
         tel = billing.get("phone", "").strip()
@@ -81,7 +86,7 @@ def fetch_woocommerce_orders():
         )
 
         ligne = {
-            "Date": datetime.now().strftime('%d/%m/%Y'),
+            "Date": parser.parse(order.get("date_created")).strftime("%d/%m/%Y"),
             "n client": get_next_client_number(existing_leads),
             "Nom": nom,
             "Numéro": tel,
@@ -96,4 +101,8 @@ def fetch_woocommerce_orders():
             "Commentaire": f"Commande WooCommerce #{order.get('id')}"
         }
 
+        from service_account import get_last_client_number
+        sheet = get_sheet()
+        last_number = get_last_client_number(sheet)
+        ligne["n client"] = last_number + 1
         append_woocommerce_lead(ligne)
