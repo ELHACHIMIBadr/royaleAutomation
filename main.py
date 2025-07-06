@@ -12,7 +12,7 @@ from service_account import (
     get_marques_by_sexe, get_modeles_by_sexe_marque,
     get_finitions, get_prix_achat
 )
-from woocommerce_orders import fetch_woocommerce_orders
+from woocommerce_orders import handle_woocommerce_webhook
 
 # === Logger ===
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
