@@ -1,4 +1,3 @@
-
 def get_next_client_number(leads):
     if not leads:
         return 1
@@ -55,15 +54,15 @@ def append_bot_lead(data: dict):
     next_id = len(existing_rows)  # en comptant l'en-tête
 
     ligne = [
-        today,                          # ✅ Date
-        next_id,                        # ✅ n° client
+        today,
+        next_id,
         data.get("nom", ""),
         data.get("tel", ""),
         data.get("ville", ""),
         data.get("adresse", ""),
         0,
         data.get("marque", ""),
-        data.get("modele", ""),         # Modèle
+        data.get("modele", ""),
         data.get("finition", ""),
         data.get("prix_achat", ""),
         data.get("prix_vente", ""),
@@ -73,18 +72,21 @@ def append_bot_lead(data: dict):
 
     leads_sheet.append_row(ligne)
 
-# === WooCommerce : Ajouter une ligne dans Leads (sans numéro client)
+# === WooCommerce : Ajouter une ligne dans Leads avec n° client incrémenté
 def append_woocommerce_lead(row_data: dict):
+    leads = get_leads_data()
+    next_id = get_next_client_number(leads)
+
     ligne = [
         row_data.get("Date", ""),
-        "",  # n° client vide
+        next_id,
         row_data.get("Nom", ""),
         row_data.get("Numéro", ""),
         row_data.get("Ville", ""),
         row_data.get("Adresse", ""),
         0,
         row_data.get("Marque", ""),
-        row_data.get("Modèle", ""),  # ✅ Clé correcte ici
+        row_data.get("Modèle", ""),
         row_data.get("Finition", ""),
         row_data.get("Prix achat", ""),
         row_data.get("Prix vente", ""),
