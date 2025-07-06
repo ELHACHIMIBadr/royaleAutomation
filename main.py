@@ -1,7 +1,6 @@
 import logging
 import os
 import threading
-import time
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -12,7 +11,6 @@ from service_account import (
     get_marques_by_sexe, get_modeles_by_sexe_marque,
     get_finitions, get_prix_achat
 )
-from woocommerce_orders import handle_woocommerce_webhook
 
 # === Logger ===
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -177,32 +175,8 @@ def launch_bot():
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
 
-# === Lancement du worker WooCommerce en tâche de fond
-def start_woocommerce_worker():
-    def worker():
-        while True:
-            try:
-                fetch_woocommerce_orders()
-                logger.info("[WooCommerce Worker] ✅ Import terminé")
-            except Exception as e:
-                logger.error(f"[WooCommerce Worker] ❌ Erreur : {e}")
-            time.sleep(300)  # toutes les 5 minutes
-
-    thread = threading.Thread(target=worker, daemon=True)
-    thread.start()
-
 # === Main
 if __name__ == "__main__":
-    start_woocommerce_worker()  # 🔁 Thread WooCommerce
-    launch_bot()                # 🤖 Bot Telegram
-
-# ... tout ton code reste inchangé jusqu'au bloc final ...
-
-# === Main
-if __name__ == "__main__":
-    start_woocommerce_worker()  # 🔁 Thread WooCommerce
-
-    # Démarrage en parallèle de Flask et du bot Telegram
     def run_bot():
         launch_bot()
 
