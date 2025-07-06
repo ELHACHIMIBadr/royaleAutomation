@@ -1,32 +1,21 @@
-from dateutil import parser
-
-# === Gère l'incrémentation du champ "n client"
-def get_next_client_number(leads):
-    if not leads:
-        return 1
-    try:
-        last = leads[-1]
-        return int(last.get("n client", "0")) + 1
-    except:
-        return 1
-
-
-
 import os
 import requests
-from datetime import datetime, date
+from datetime import date
+from dateutil import parser
 from service_account import (
     get_leads_data, append_woocommerce_lead,
-    get_watch_database, get_prix_achat
+    get_watch_database, get_prix_achat,
+    get_last_client_number, get_sheet
 )
 
-# === Chargement de la base produit
+# === Chargement base produit
 watch_db = get_watch_database()
 
-# === API WooCommerce
+# === Accès API WooCommerce
 WC_BASE_URL = os.environ.get("WC_BASE_URL")
 WC_KEY = os.environ.get("WC_KEY")
 WC_SECRET = os.environ.get("WC_SECRET")
+
 
 def fetch_woocommerce_orders():
     url = f"{WC_BASE_URL}/wp-json/wc/v3/orders"
@@ -37,72 +26,90 @@ def fetch_woocommerce_orders():
         "order": "desc"
     }
 
-    response = requests.get(url, auth=auth, params=params)
-    orders = response.json()
+    try:
+        response = requests.get(url, auth=auth, params=params)
+        response.raise_for_status()
+        orders = response.json()
+    except Exception as e:
+        print(f"[WooCommerce Worker] ❌ Erreur de récupération des commandes : {e}")
+        return
 
+    # Récupération leads existants
     existing_leads = get_leads_data()
     existing_phones = {lead.get("Numéro") for lead in existing_leads}
+    sheet = get_sheet()
+    last_client_number = get_last_client_number(sheet)
 
     today = date.today()
+
     for order in orders:
-        order_date = parser.parse(order.get('date_created')).date()
-        if order_date != today:
-            continue
-        billing = order.get("billing", {})
-        nom = billing.get("first_name", "") + " " + billing.get("last_name", "")
-        tel = billing.get("phone", "").strip()
-        ville = billing.get("city", "")
-        adresse = billing.get("address_1", "")
+        try:
+            order_date = parser.parse(order.get('date_created')).date()
+            if order_date != today:
+                continue
 
-        if tel in existing_phones:
-            continue
+            billing = order.get("billing", {})
+            nom = f"{billing.get('first_name', '').strip()} {billing.get('last_name', '').strip()}".strip()
+            tel = billing.get("phone", "").strip()
+            ville = billing.get("city", "")
+            adresse = billing.get("address_1", "")
 
-        items = order.get("line_items", [])
-        if not items:
-            continue
+            if not tel or not nom:
+                continue
 
-        produit = items[0]
-        produit_name = produit.get("name", "")
+            # Détection doublon stricte sur ligne précédente uniquement
+            if existing_leads:
+                last_lead = existing_leads[-1]
+                if last_lead.get("Numéro") == tel and last_lead.get("Nom") == nom:
+                    continue
 
-        # Tentative de mappage automatique
-        matched_row = next((
-            row for row in watch_db
-            if row.get("modèle", "").lower() in produit_name.lower()
-        ), None)
+            items = order.get("line_items", [])
+            if not items:
+                continue
 
-        if not matched_row:
-            continue
+            produit = items[0]
+            produit_name = produit.get("name", "")
 
-        marque = matched_row.get("marque", "")
-        modele = matched_row.get("modèle", "")
-        finition = matched_row.get("finition", "")
-        sexe = matched_row.get("sexe", "Homme")
+            # Matching basé sur "modèle"
+            matched_row = next((
+                row for row in watch_db
+                if row.get("modèle", "").lower() in produit_name.lower()
+            ), None)
 
-        if not all([marque, modele, finition]):
-            continue
+            if not matched_row:
+                continue
 
-        prix_achat = get_prix_achat(
-            watch_db, sexe, marque, modele, finition, "Simple"
-        )
+            marque = matched_row.get("marque", "")
+            modele = matched_row.get("modèle", "")
+            finition = matched_row.get("finition", "")
+            sexe = matched_row.get("sexe", "Homme")
 
-        ligne = {
-            "Date": parser.parse(order.get("date_created")).strftime("%d/%m/%Y"),
-            "n client": get_next_client_number(existing_leads),
-            "Nom": nom,
-            "Numéro": tel,
-            "Ville": ville,
-            "Adresse": adresse,
-            "Marque": marque,
-            "Modèle": modele,
-            "Finition": finition,
-            "Prix achat": prix_achat,
-            "Prix vente": order.get("total", ""),
-            "Statut": "À confirmer",
-            "Commentaire": f"Commande WooCommerce #{order.get('id')}"
-        }
+            if not all([marque, modele, finition]):
+                continue
 
-        from service_account import get_last_client_number
-        sheet = get_sheet()
-        last_number = get_last_client_number(sheet)
-        ligne["n client"] = last_number + 1
-        append_woocommerce_lead(ligne)
+            prix_achat = get_prix_achat(
+                watch_db, sexe, marque, modele, finition, "Simple"
+            )
+
+            # Insertion
+            ligne = {
+                "Date": parser.parse(order.get("date_created")).strftime("%d/%m/%Y"),
+                "n client": last_client_number + 1,
+                "Nom": nom,
+                "Numéro": tel,
+                "Ville": ville,
+                "Adresse": adresse,
+                "Marque": marque,
+                "Modèle": modele,
+                "Finition": finition,
+                "Prix achat": prix_achat,
+                "Prix vente": order.get("total", ""),
+                "Statut": "À confirmer",
+                "Commentaire": f"Commande WooCommerce #{order.get('id')}"
+            }
+
+            append_woocommerce_lead(ligne)
+            last_client_number += 1
+
+        except Exception as e:
+            print(f"[WooCommerce Worker] ❌ Erreur lors du traitement d'une commande : {e}")
