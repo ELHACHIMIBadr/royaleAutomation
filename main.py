@@ -1,7 +1,6 @@
 import logging
 import os
 import threading
-import asyncio
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -30,11 +29,9 @@ PORT = int(os.environ.get("PORT", 8443))
 
 # Charger la base montres
 watch_db = get_watch_database()
-
-# IDs autorisés à déclencher le bot
 AUTHORIZED_USERS = [5427202496, 1580306191]
 
-# === Étapes conversation Telegram ===
+# === Étapes du bot Telegram ===
 async def start_conv(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     if user.id not in AUTHORIZED_USERS:
@@ -117,7 +114,6 @@ async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def get_commentaire(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['commentaire'] = update.message.text
     data = context.user_data
-
     resume = (
         f"✅ Résumé de la commande :\n"
         f"👤 Nom : {data['nom']}\n"
@@ -142,10 +138,33 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Commande annulée.")
     return ConversationHandler.END
 
-# === Bot Telegram ===
-def launch_bot():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+# === Serveur Flask pour Webhook Woo ===
+from flask import Flask, request
+from woocommerce_orders import handle_woocommerce_webhook
+
+flask_app = Flask(__name__)
+
+@flask_app.route('/woocommerce/webhook', methods=['GET', 'POST'])
+def woocommerce_webhook():
+    if request.method == 'GET':
+        return "✅ Webhook actif (GET reçu)", 200
+    try:
+        if request.is_json:
+            data = request.get_json()
+        else:
+            data = request.form.to_dict()
+    except Exception as e:
+        return f"❌ Erreur lecture corps : {e}", 400
+
+    handle_woocommerce_webhook(data)
+    return "✅ Webhook reçu (POST)", 200
+
+def run_flask():
+    flask_app.run(host="0.0.0.0", port=5000)
+
+# === Main ===
+if __name__ == "__main__":
+    threading.Thread(target=run_flask, daemon=True).start()
 
     app = Application.builder().token(BOT_TOKEN).build()
     conv_handler = ConversationHandler(
@@ -166,38 +185,9 @@ def launch_bot():
         fallbacks=[CommandHandler("cancel", cancel)],
     )
     app.add_handler(conv_handler)
-
-    # Lancer sur un port différent de Flask (pas 5000)
     app.run_webhook(
         listen="0.0.0.0",
-        port=8443,
+        port=PORT,
         url_path=BOT_TOKEN,
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
-
-# === Serveur Flask pour Webhook Woo ===
-from flask import Flask, request
-from woocommerce_orders import handle_woocommerce_webhook
-
-flask_app = Flask(__name__)
-
-@flask_app.route('/woocommerce/webhook', methods=['GET', 'POST'])
-def woocommerce_webhook():
-    if request.method == 'GET':
-        return "✅ Webhook actif (GET reçu)", 200
-
-    try:
-        if request.is_json:
-            data = request.get_json()
-        else:
-            data = request.form.to_dict()
-    except Exception as e:
-        return f"❌ Erreur lors de la lecture du corps : {e}", 400
-
-    handle_woocommerce_webhook(data)
-    return "✅ Webhook reçu (POST)", 200
-
-# === Main
-if __name__ == "__main__":
-    threading.Thread(target=launch_bot, daemon=True).start()
-    flask_app.run(host="0.0.0.0", port=5000)
