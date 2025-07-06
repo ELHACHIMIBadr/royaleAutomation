@@ -101,7 +101,6 @@ async def get_boite(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['prix_vente'] = update.message.text
-
     data = context.user_data
     prix_achat = get_prix_achat(
         watch_db,
@@ -112,7 +111,6 @@ async def get_prix_vente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data['boite']
     )
     context.user_data['prix_achat'] = prix_achat
-
     await update.message.reply_text("📝 Un commentaire (facultatif) ? (ex: livraison le vendredi 05/07)")
     return COMMENTAIRE
 
@@ -144,10 +142,9 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Commande annulée.")
     return ConversationHandler.END
 
-# === Lancement du bot Telegram
+# === Bot Telegram ===
 def launch_bot():
     app = Application.builder().token(BOT_TOKEN).build()
-
     conv_handler = ConversationHandler(
         entry_points=[MessageHandler(filters.TEXT & filters.ChatType.GROUPS, start_conv)],
         states={
@@ -165,9 +162,7 @@ def launch_bot():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-
     app.add_handler(conv_handler)
-
     app.run_webhook(
         listen="0.0.0.0",
         port=PORT,
@@ -175,18 +170,13 @@ def launch_bot():
         webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
     )
 
-# === Main
-if __name__ == "__main__":
-    def run_bot():
-        launch_bot()
+# === Serveur Flask pour Webhook Woo ===
+from flask import Flask, request
+from woocommerce_orders import handle_woocommerce_webhook
 
-    def run_flask():
-        from flask import Flask, request
-        from woocommerce_orders import handle_woocommerce_webhook
+flask_app = Flask(__name__)
 
-        flask_app = Flask(__name__)
-
-       @flask_app.route('/woocommerce/webhook', methods=['GET', 'POST'])
+@flask_app.route('/woocommerce/webhook', methods=['GET', 'POST'])
 def woocommerce_webhook():
     if request.method == 'GET':
         return "✅ Webhook actif (GET reçu)", 200
@@ -194,8 +184,7 @@ def woocommerce_webhook():
     handle_woocommerce_webhook(data)
     return "✅ Webhook reçu (POST)", 200
 
-
-        flask_app.run(host="0.0.0.0", port=5000)
-
-    threading.Thread(target=run_flask, daemon=True).start()
-    run_bot()
+# === Main
+if __name__ == "__main__":
+    threading.Thread(target=launch_bot, daemon=True).start()
+    flask_app.run(host="0.0.0.0", port=5000)
