@@ -1,6 +1,39 @@
+import datetime
+from service_account import (
+    get_leads_data,
+    append_woocommerce_lead,
+    get_watch_database,
+    get_prix_achat
+)
 
-# === Gère l'incrémentation du champ "n client"
+# Charger la base de données produit dès le début
+watch_db = get_watch_database()
+
+
+def find_matching_product(product_name):
+    """Essaie de trouver un produit correspondant dans la base de données."""
+    product_name_lower = product_name.lower()
+
+    for row in watch_db:
+        modele = row.get("modèle", "").lower()
+        if modele in product_name_lower:
+            return row
+    return None
+
+
+def is_duplicate(leads, nom, numero):
+    """Vérifie si la commande a déjà été insérée dans Google Sheets."""
+    for lead in leads:
+        if (
+            lead.get("Nom", "").strip().lower() == nom.strip().lower()
+            and lead.get("Numéro", "").strip() == numero.strip()
+        ):
+            return True
+    return False
+
+
 def get_next_client_number(leads):
+    """Incrémente le numéro de client automatiquement."""
     if not leads:
         return 1
     try:
@@ -10,90 +43,64 @@ def get_next_client_number(leads):
         return 1
 
 
+def handle_woocommerce_webhook(data):
+    """Traite le webhook WooCommerce et insère une ligne dans Google Sheets."""
 
-import os
-import requests
-from datetime import datetime
-from service_account import (
-    get_leads_data, append_woocommerce_lead,
-    get_watch_database, get_prix_achat
-)
+    # === 1. Extraction des données client ===
+    billing = data.get("billing", {})
+    nom = f"{billing.get('first_name', '').strip()} {billing.get('last_name', '').strip()}".strip()
+    numero = billing.get("phone", "").strip()
+    ville = billing.get("city", "").strip()
+    adresse = billing.get("address_1", "").strip()
+    date = datetime.datetime.now().strftime("%d/%m/%Y")
 
-# === Chargement de la base produit
-watch_db = get_watch_database()
+    # === 2. Vérifier les produits ===
+    items = data.get("line_items", [])
+    if not items:
+        print("❌ Aucun produit dans la commande reçue.")
+        return
 
-# === API WooCommerce
-WC_BASE_URL = os.environ.get("WC_BASE_URL")
-WC_KEY = os.environ.get("WC_KEY")
-WC_SECRET = os.environ.get("WC_SECRET")
+    produit_name = items[0].get("name", "")
+    matched_row = find_matching_product(produit_name)
 
-def fetch_woocommerce_orders():
-    url = f"{WC_BASE_URL}/wp-json/wc/v3/orders"
-    auth = (WC_KEY, WC_SECRET)
-    params = {
-        "per_page": 20,
-        "orderby": "date",
-        "order": "desc"
-    }
+    if not matched_row:
+        print(f"❌ Produit non reconnu : {produit_name}")
+        return
 
-    response = requests.get(url, auth=auth, params=params)
-    orders = response.json()
+    marque = matched_row.get("marque", "")
+    modele = matched_row.get("modèle", "")
+    finition = matched_row.get("finition", "")
+    sexe = matched_row.get("sexe", "Homme")
 
-    existing_leads = get_leads_data()
-    existing_phones = {lead.get("Numéro") for lead in existing_leads}
+    # === 3. Vérification anti-doublon ===
+    leads = get_leads_data()
+    if is_duplicate(leads, nom, numero):
+        print(f"⚠️ Commande déjà existante pour {nom} ({numero})")
+        return
 
-    for order in orders:
-        billing = order.get("billing", {})
-        nom = billing.get("first_name", "") + " " + billing.get("last_name", "")
-        tel = billing.get("phone", "").strip()
-        ville = billing.get("city", "")
-        adresse = billing.get("address_1", "")
+    # === 4. Générer prix d’achat ===
+    prix_achat = get_prix_achat(modele, finition)
 
-        if tel in existing_phones:
-            continue
+    # === 5. Générer n° client ===
+    n_client = get_next_client_number(leads)
 
-        items = order.get("line_items", [])
-        if not items:
-            continue
+    # === 6. Insertion dans Google Sheets ===
+    ligne = [
+        date,
+        n_client,
+        nom,
+        numero,
+        ville,
+        adresse,
+        0,  # coût livraison
+        marque,
+        modele,
+        finition,
+        prix_achat,
+        sexe,
+        "Confirmé",  # statut par défaut
+        "",  # commentaire
+    ]
 
-        produit = items[0]
-        produit_name = produit.get("name", "")
-
-        # Tentative de mappage automatique
-        matched_row = next((
-            row for row in watch_db
-            if row.get("modèle", "").lower() in produit_name.lower()
-        ), None)
-
-        if not matched_row:
-            continue
-
-        marque = matched_row.get("marque", "")
-        modele = matched_row.get("modèle", "")
-        finition = matched_row.get("finition", "")
-        sexe = matched_row.get("sexe", "Homme")
-
-        if not all([marque, modele, finition]):
-            continue
-
-        prix_achat = get_prix_achat(
-            watch_db, sexe, marque, modele, finition, "Simple"
-        )
-
-        ligne = {
-            "Date": datetime.now().strftime('%d/%m/%Y'),
-            "n client": get_next_client_number(existing_leads),
-            "Nom": nom,
-            "Numéro": tel,
-            "Ville": ville,
-            "Adresse": adresse,
-            "Marque": marque,
-            "Modèle": modele,
-            "Finition": finition,
-            "Prix achat": prix_achat,
-            "Prix vente": order.get("total", ""),
-            "Statut": "À confirmer",
-            "Commentaire": f"Commande WooCommerce #{order.get('id')}"
-        }
-
-        append_woocommerce_lead(ligne)
+    append_woocommerce_lead(ligne)
+    print(f"✅ Commande insérée : {nom} - {produit_name}")
