@@ -1,6 +1,7 @@
 import logging
 import os
 import threading
+import json
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
@@ -152,7 +153,8 @@ def woocommerce_webhook():
         data = request.get_json(silent=True)
         if not data:
             data = request.form.to_dict()
-        print("📦 Webhook reçu :", data)
+        print("📦 Webhook WooCommerce reçu :")
+        print(json.dumps(data, indent=2, ensure_ascii=False))  # ✅ Impression formatée du JSON
     except Exception as e:
         return f"❌ Erreur lecture corps : {e}", 400
 
